@@ -1,0 +1,38 @@
+struct Edge {
+    int to, id;
+};
+
+vector<vector<Edge>> adj;
+vector<int> vis, par, parEdge;
+vector<int> cycleEdges;
+
+bool dfs(int u, int p) {
+    vis[u] = 1;
+
+    for (auto [v, id] : adj[u]) {
+        if (v == p) continue;
+
+        if (!vis[v]) {
+            par[v] = u;
+            parEdge[v] = id;
+
+            if (dfs(v, u))
+                return true;
+        }
+        else {
+            // Cycle found: u -> v
+            cycleEdges.push_back(id); // edge (u,v)
+
+            int cur = u;
+            while (cur != v) {
+                cycleEdges.push_back(parEdge[cur]);
+                cur = par[cur];
+            }
+
+            reverse(cycleEdges.begin(), cycleEdges.end());
+            return true;
+        }
+    }
+
+    return false;
+}

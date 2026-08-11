@@ -1,0 +1,274 @@
+#include <iostream>
+#include <vector>
+
+using namespace std;
+
+// Maximum queries and bits needed (2^19 = 524,288 > 500,000)
+const int MAXM = 500005;
+const int BITS = 19;
+const int MAX_NODES = MAXM * (BITS + 1) + 100;
+
+struct Node {
+    int count;
+    int child[2];
+} tree[MAX_NODES];
+
+int root[MAXM];
+int node_cnt = 0;
+
+// Inserts value x into the persistent trie
+int insert(int prev_root, int x) {
+    int new_root = ++node_cnt;
+    int curr = new_root;
+    int prev = prev_root;
+
+    tree[curr] = tree[prev];
+    tree[curr].count++;
+
+    for (int b = BITS - 1; b >= 0; --b) {
+        int bit = (x >> b) & 1;
+        tree[curr].child[bit] = ++node_cnt;
+
+        int prev_child = tree[prev].child[bit];
+        curr = tree[curr].child[bit];
+        prev = prev_child;
+
+        tree[curr] = tree[prev];
+        tree[curr].count++;
+    }
+    return new_root;
+}
+
+// Type 1: Find y in [L, R] maximizing (x ^ y)
+int query_max_xor(int L, int R, int x) {
+    int u = root[R];
+    int v = root[L - 1];
+    int res = 0;
+
+    for (int b = BITS - 1; b >= 0; --b) {
+        int x_bit = (x >> b) & 1;
+        int desired = 1 - x_bit;
+
+        int u_child = tree[u].child[desired];
+        int v_child = tree[v].child[desired];
+        int count = tree[u_child].count - tree[v_child].count;
+
+        if (count > 0) {
+            res |= (desired << b);
+            u = u_child;
+            v = v_child;
+        } else {
+            res |= (x_bit << b);
+            u = tree[u].child[x_bit];
+            v = tree[v].child[x_bit];
+        }
+    }
+    return res;
+}
+
+// Type 3: Count numbers <= x in range [L, R]
+int query_count_leq(int L, int R, int x) {
+    int u = root[R];
+    int v = root[L - 1];
+    int ans = 0;
+
+    for (int b = BITS - 1; b >= 0; --b) {
+        int x_bit = (x >> b) & 1;
+        if (x_bit == 1) {
+            int u_left = tree[u].child[0];
+            int v_left = tree[v].child[0];
+            ans += tree[u_left].count - tree[v_left].count;
+
+            u = tree[u].child[1];
+            v = tree[v].child[1];
+        } else {
+            u = tree[u].child[0];
+            v = tree[v].child[0];
+        }
+    }
+    ans += tree[u].count - tree[v].count;
+    return ans;
+}
+
+// Type 4: Find k-th smallest element in range [L, R]
+int query_kth(int L, int R, int k) {
+    int u = root[R];
+    int v = root[L - 1];
+    int res = 0;
+
+    for (int b = BITS - 1; b >= 0; --b) {
+        int u_left = tree[u].child[0];
+        int v_left = tree[v].child[0];
+        int left_count = tree[u_left].count - tree[v_left].count;
+
+        if (k <= left_count) {
+            u = u_left;
+            v = v_left;
+        } else {
+            k -= left_count;
+            res |= (1 << b);
+            u = tree[u].child[1];
+            v = tree[v].child[1];
+        }
+    }
+    return res;
+}
+
+int main() {
+    // Fast I/O
+    ios_base::sync_with_stdio(false);
+    cin.tie(NULL);
+
+    int M;
+    cin >> M ;
+
+    int N = 0; // Current array size
+    root[0] = 0;
+
+    while (M--) {
+        int type;
+        cin >> type;
+
+        if (type == 0) { // Append
+            int x;
+            cin >> x;
+            N++;
+            root[N] = insert(root[N - 1], x);
+        } else if (type == 1) { // Max XOR
+            int L, R, x;
+            cin >> L >> R >> x;
+            cout << query_max_xor(L, R, x) << "\n";
+        } else if (type == 2) { // Delete last k
+            int k;
+            cin >> k;
+            N -= k;
+        } else if (type == 3) { // Count <= x
+            int L, R, x;
+            cin >> L >> R >> x;
+            cout << query_count_leq(L, R, x) << "\n";
+        } else if (type == 4) { // K-th order statistic
+            int L, R, k;
+            cin >> L >> R >> k;
+            cout << query_kth(L, R, k) << "\n";
+        }
+    }
+
+    return 0;
+}
+
+// For strings
+struct Node {
+    int child[26] = {0};
+    set<int> pass_indices; // Indices of strings passing through this node
+    set<int> end_indices;  // Indices of strings ending at this node
+};
+
+vector<Node> trie;
+
+// Helper function to check if a set contains any index in range [l, r]
+bool has_in_range(const set<int>& s, int l, int r) {
+    auto it = s.lower_bound(l);
+    return (it != s.end() && *it <= r);
+}
+
+// Inserts string v[idx] = str into the Trie
+void insert_string(int idx, const string& str) {
+    int curr = 0;
+    trie[curr].pass_indices.insert(idx);
+
+    for (char ch : str) {
+        int c = ch - 'a';
+        if (!trie[curr].child[c]) {
+            trie[curr].child[c] = trie.size();
+            trie.push_back(Node());
+        }
+        curr = trie[curr].child[c];
+        trie[curr].pass_indices.insert(idx);
+    }
+    trie[curr].end_indices.insert(idx);
+}
+
+// Removes string v[idx] = str from the Trie
+void remove_string(int idx, const string& str) {
+    int curr = 0;
+    trie[curr].pass_indices.erase(idx);
+
+    for (char ch : str) {
+        int c = ch - 'a';
+        curr = trie[curr].child[c];
+        trie[curr].pass_indices.erase(idx);
+    }
+    trie[curr].end_indices.erase(idx);
+}
+
+// Query Type 2: Checks if any v[j] (j in [l, r]) is a prefix of string s
+bool query_vprefix(int l, int r, const string& s) {
+    int curr = 0;
+    if (has_in_range(trie[curr].end_indices, l, r)) return true;
+
+    for (char ch : s) {
+        int c = ch - 'a';
+        if (!trie[curr].child[c]) break;
+        curr = trie[curr].child[c];
+        if (has_in_range(trie[curr].end_indices, l, r)) return true;
+    }
+    return false;
+}
+
+// Query Type 3: Checks if string s is a prefix of any v[j] (j in [l, r])
+bool query_sprefix(int l, int r, const string& s) {
+    int curr = 0;
+    for (char ch : s) {
+        int c = ch - 'a';
+        if (!trie[curr].child[c]) return false;
+        curr = trie[curr].child[c];
+    }
+    return has_in_range(trie[curr].pass_indices, l, r);
+}
+
+int main() {
+    ios_base::sync_with_stdio(false);
+    cin.tie(NULL);
+
+    int n;
+    cin >> n ;
+
+    trie.reserve(1000005);
+    trie.push_back(Node());
+
+    vector<string> v(n + 1);
+    for (int i = 1; i <= n; ++i) {
+        cin >> v[i];
+        insert_string(i, v[i]);
+    }
+
+    int q;
+    cin >> q;
+    while (q--) {
+        int type;
+        cin >> type;
+
+        if (type == 1) {
+            int i;
+            string s;
+            cin >> i >> s;
+            remove_string(i, v[i]);
+            v[i] = s;
+            insert_string(i, v[i]);
+        }
+        else if (type == 2) {
+            int l, r;
+            string s;
+            cin >> l >> r >> s;
+            cout << (query_vprefix(l, r, s) ? "Y\n" : "N\n");
+        }
+        else if (type == 3) {
+            int l, r;
+            string s;
+            cin >> l >> r >> s;
+            cout << (query_sprefix(l, r, s) ? "Y\n" : "N\n");
+        }
+    }
+
+    return 0;
+}

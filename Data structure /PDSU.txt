@@ -1,0 +1,164 @@
+#include <bits/stdc++.h>
+using namespace std;
+
+struct Node {
+    int val;
+    int left = 0, right = 0;
+};
+
+vector<Node> tree;
+vector<int> root_parent, root_rank;
+int node_cnt = 0;
+
+// Persistent Segment Tree operations
+int build(int l, int r, const vector<int>& init_val) {
+    int id = ++node_cnt;
+    tree.push_back({});
+    if (l == r) {
+        tree[id].val = init_val[l];
+        return id;
+    }
+    int mid = (l + r) / 2;
+    tree[id].left = build(l, mid, init_val);
+    tree[id].right = build(mid + 1, r, init_val);
+    return id;
+}
+
+int update(int prev_root, int l, int r, int idx, int new_val) {
+    int id = ++node_cnt;
+    tree.push_back(tree[prev_root]);
+    if (l == r) {
+        tree[id].val = new_val;
+        return id;
+    }
+    int mid = (l + r) / 2;
+    if (idx <= mid)
+        tree[id].left = update(tree[prev_root].left, l, mid, idx, new_val);
+    else
+        tree[id].right = update(tree[prev_root].right, mid + 1, r, idx, new_val);
+    return id;
+}
+
+int query_val(int root, int l, int r, int idx) {
+    if (l == r) return tree[root].val;
+    int mid = (l + r) / 2;
+    if (idx <= mid) return query_val(tree[root].left, l, mid, idx);
+    return query_val(tree[root].right, mid + 1, r, idx);
+}
+
+// DSU Helper: Find root in version `ver`
+int find_root(int ver, int V, int u) {
+    int p = query_val(root_parent[ver], 0, V - 1, u);
+    if (p == u) return u;
+    return find_root(ver, V, p);
+}
+
+// Check connectivity in version `ver`
+bool is_connected(int ver, int V, int u, int v) {
+    return find_root(ver, V, u) == find_root(ver, V, v);
+}
+
+// Persistent Union: Creates version (prev_ver + 1)
+void unite(int prev_ver, int V, int u, int v) {
+    int next_ver = prev_ver + 1;
+    int ru = find_root(prev_ver, V, u);
+    int rv = find_root(prev_ver, V, v);
+
+    if (ru == rv) {
+        root_parent[next_ver] = root_parent[prev_ver];
+        root_rank[next_ver]   = root_rank[prev_ver];
+        return;
+    }
+
+    int rank_u = query_val(root_rank[prev_ver], 0, V - 1, ru);
+    int rank_v = query_val(root_rank[prev_ver], 0, V - 1, rv);
+
+    if (rank_u < rank_v) {
+        root_parent[next_ver] = update(root_parent[prev_ver], 0, V - 1, ru, rv);
+        root_rank[next_ver]   = root_rank[prev_ver];
+    } else if (rank_u > rank_v) {
+        root_parent[next_ver] = update(root_parent[prev_ver], 0, V - 1, rv, ru);
+        root_rank[next_ver]   = root_rank[prev_ver];
+    } else {
+        root_parent[next_ver] = update(root_parent[prev_ver], 0, V - 1, rv, ru);
+        root_rank[next_ver]   = update(root_rank[prev_ver], 0, V - 1, ru, rank_u + 1);
+    }
+}
+
+int main() {
+    ios_base::sync_with_stdio(false);
+    cin.tie(nullptr);
+
+    int m, n, q;
+    if (!(cin >> m >> n >> q)) return 0;
+
+    vector<vector<int>> grid(m, vector<int>(n));
+    for (int i = 0; i < m; i++)
+        for (int j = 0; j < n; j++)
+            cin >> grid[i][j];
+
+    auto get_id = [&](int r, int c) { return r * n + c; };
+
+    // Represent edge as {weight, u, v}
+    vector<array<int, 3>> edges;
+    for (int i = 0; i < m; i++) {
+        for (int j = 0; j < n; j++) {
+            int u = get_id(i, j);
+            if (i + 1 < m) edges.push_back({max(grid[i][j], grid[i + 1][j]), u, get_id(i + 1, j)});
+            if (j + 1 < n) edges.push_back({max(grid[i][j], grid[i][j + 1]), u, get_id(i, j + 1)});
+        }
+    }
+
+    // Default C++ sort orders by weight automatically!
+    sort(edges.begin(), edges.end());
+
+    int E = edges.size();
+    int V = m * n;
+
+    root_parent.resize(E + 1);
+    root_rank.resize(E + 1);
+
+    tree.reserve(30 * V);
+    node_cnt = 0;
+    tree.push_back({});
+
+    vector<int> init_p(V), init_r(V, 0);
+    iota(init_p.begin(), init_p.end(), 0);
+    root_parent[0] = build(0, V - 1, init_p);
+    root_rank[0]   = build(0, V - 1, init_r);
+
+    for (int i = 0; i < E; i++) {
+        // edges[i][1] is u, edges[i][2] is v
+        unite(i, V, edges[i][1], edges[i][2]);
+    }
+
+    while (q--) {
+        int x1, y1, x2, y2;
+        cin >> x1 >> y1 >> x2 >> y2;
+        x1--; y1--; x2--; y2--;
+
+        int u = get_id(x1, y1);
+        int v = get_id(x2, y2);
+
+        if (u == v) {
+            cout << grid[x1][y1] << "\n";
+            continue;
+        }
+
+        int low = 1, high = E, ans_idx = E - 1;
+        while (low <= high) {
+            int mid = low + (high - low) / 2;
+            if (is_connected(mid, V, u, v)) {
+                ans_idx = mid - 1;
+                high = mid - 1;
+            } else {
+                low = mid + 1;
+            }
+        }
+
+        // edges[ans_idx][0] is weight
+        cout << edges[ans_idx][0] << "\n";
+    }
+
+    return 0;
+}

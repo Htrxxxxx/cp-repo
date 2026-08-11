@@ -1,0 +1,1034 @@
+ #include <bits/stdc++.h>
+using namespace std;
+
+void fast() {
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+#ifndef ONLINE_JUDGE
+    freopen("input.txt", "r", stdin);
+    freopen("output.txt", "w", stdout);
+#endif
+}
+
+extern struct node *const EMPTY;
+
+enum DIR { L, R };
+
+mt19937 eng(0);
+uniform_int_distribution<int> rnd{INT_MIN + 1, INT_MAX};
+
+struct node {
+    int val, pri, sz;
+    node *ch[2], *par;
+
+    node() : pri(INT_MIN), sz(0), ch{this, this}, par(this) {}
+
+    node(int val)
+        : val(val), pri(rnd(eng)), sz(1),
+          ch{EMPTY, EMPTY}, par(EMPTY) {}
+
+    void upd() {
+        sz = ch[L]->sz + 1 + ch[R]->sz;
+    }
+
+    void push() {}
+};
+
+node *const EMPTY = new node();
+
+void link(node *p, node *c, int dir) {
+    if (c != EMPTY) c->par = p;
+    if (p != EMPTY) {
+        p->ch[dir] = c;
+        p->upd();
+    }
+}
+
+/*
+left tree: keys < val
+right tree: keys >= val
+*/
+pair<node *, node *> split_by_value(node *root, int val) {
+    if (root == EMPTY) return {EMPTY, EMPTY};
+
+    root->push();
+
+    if (root->val < val) {
+        auto [ls, gr] = split_by_value(root->ch[R], val);
+        link(root, ls, R);
+        link(EMPTY, gr, R);
+        return {root, gr};
+    } else {
+        auto [ls, gr] = split_by_value(root->ch[L], val);
+        link(root, gr, L);
+        link(EMPTY, ls, L);
+        return {ls, root};
+    }
+}
+
+node *merge(node *ls, node *gr) {
+    if (ls == EMPTY) return gr;
+    if (gr == EMPTY) return ls;
+
+    if (ls->pri > gr->pri) {
+        link(ls, merge(ls->ch[R], gr), R);
+        return ls;
+    }
+
+    link(gr, merge(ls, gr->ch[L]), L);
+    return gr;
+}
+// the keys are not guaranteed to be separated.
+// time : O(n)
+node *merge_interleaved(node *l, node *r) {
+    if (l == EMPTY) return r;
+    if (r == EMPTY) return l;
+
+    if (l->pri < r->pri) swap(l, r);
+
+    auto [lt, rt] = split_by_value(r, l->val);
+
+    link(l, merge_interleaved(l->ch[L], lt), L);
+    link(l, merge_interleaved(l->ch[R], rt), R);
+
+    return l;
+}
+
+const int N = 2e5 + 1;
+int a[N];
+
+void dfs(node *cur, int v) {
+    a[cur->val] = v;
+    if (cur->ch[R] != EMPTY) dfs(cur->ch[R], v);
+    if (cur->ch[L] != EMPTY) dfs(cur->ch[L], v);
+}
+
+void solve() {
+    int n;
+    cin >> n;
+
+    node *treaps[101];
+    fill(treaps, treaps + 101, EMPTY);
+
+    for (int i = 0; i < n; i++) {
+        int x;
+        cin >> x;
+        treaps[x] = merge(treaps[x], new node(i));
+    }
+
+    int q;
+    cin >> q;
+
+    while (q--) {
+        int l, r, x, y;
+        cin >> l >> r >> x >> y;
+        --l;
+        --r;
+
+        if (x == y || treaps[x] == EMPTY) continue;
+
+        auto [less, ge] = split_by_value(treaps[x], l);
+        auto [bet, gre] = split_by_value(ge, r + 1);
+
+        treaps[y] = merge_interleaved(treaps[y], bet);
+        treaps[x] = merge_interleaved(less, gre);
+    }
+
+    for (int i = 1; i <= 100; i++)
+        if (treaps[i] != EMPTY)
+            dfs(treaps[i], i);
+
+    for (int i = 0; i < n; i++)
+        cout << a[i] << ' ';
+}
+
+int main() {
+    fast();
+    solve();
+    return 0;
+}
+
+
+// rev range get sum
+
+extern struct node *const EMPTY;
+enum DIR {
+    L, R
+};
+typedef long long DataType;
+mt19937 eng(0);
+uniform_int_distribution<int> rnd{INT_MIN + 1, INT_MAX};
+
+struct node {
+    DataType val, sum;
+    int pri, sz;
+    node *ch[2], *par;
+    bool isRev ;
+    node() : pri(INT_MIN), sz(0), ch{this, this}, par(this), sum(0) , isRev(false) {}
+
+    node(const DataType &val) : val(val), pri(rnd(eng)), sz(1), ch{EMPTY, EMPTY}, par(EMPTY), sum(val) , isRev(false) {}
+
+    void upd() {
+        sz = ch[L]->sz + 1 + ch[R]->sz;
+        sum = ch[L]->sum + val + ch[R]->sum;
+    }
+
+    void rev() {
+        isRev = !isRev ;
+    }
+
+    void push() {
+        if (this == EMPTY || !isRev) return;
+        swap(ch[L], ch[R]);
+        if (ch[L] != EMPTY) ch[L]->isRev ^= 1;
+        if (ch[R] != EMPTY) ch[R]->isRev ^= 1;
+        isRev = false;
+    }
+};
+
+node *const EMPTY = new node();
+
+void link(node *p, node *c, int dir) {
+    if (c != EMPTY)c->par = p;
+    if (p != EMPTY) {
+        p->ch[dir] = c;
+        p->upd();
+    }
+}
+
+int getDir(node *p, node *c) {
+    return p->ch[R] == c;
+}
+
+// first tree = first k elements (by inorder order)
+// second tree = remaining elements
+pair<node *, node *> split(node *root, int frstSz) {
+    if (root == EMPTY)return {EMPTY, EMPTY};
+    root->push();
+    if (frstSz <= root->ch[L]->sz) {
+        auto [ls, gr] = split(root->ch[L], frstSz);
+        link(root, gr, L);
+        link(EMPTY, ls, L);
+        return {ls, root};
+    }
+    auto [ls, gr] = split(root->ch[R], frstSz - root->ch[L]->sz - 1);
+    link(root, ls, R);
+    link(EMPTY, gr, R);
+    return {root, gr};
+}
+
+node *merge(node *ls, node *gr) {
+    if (ls == EMPTY)return gr;
+    if (gr == EMPTY)return ls;
+    ls->push();
+    gr->push();
+    if (ls->pri > gr->pri) {
+        link(ls, merge(ls->ch[R], gr), R);
+        return ls;
+    }
+    link(gr, merge(ls, gr->ch[L]), L);
+    return gr;
+}
+
+void revRange(node *&root, int s, int e) {
+    node *bef, *aft, *bet;
+    tie(root, aft) = split(root, e + 1);
+    tie(bef, bet) = split(root, s);
+    bet->rev();
+    root = merge(merge(bef, bet), aft);
+}
+
+DataType getSum(node *&root, int s, int e) {
+    node *bef, *aft, *bet;
+    tie(root, aft) = split(root, e + 1);
+    tie(bef, bet) = split(root, s);
+    DataType res = bet->sum;
+    root = merge(merge(bef, bet), aft);
+    return res;
+}
+// how to print the values in a treap .
+void inorder(node *cur) {
+    if (cur == EMPTY) return;
+    inorder(cur->ch[0]);
+    cout << cur->val << ' ';
+    inorder(cur->ch[1]);
+}
+
+// pushFromRoot and getDfsOrder .
+
+#include <bits/stdc++.h>
+using namespace std;
+
+void fast() {
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+#ifndef ONLINE_JUDGE
+    freopen("input.txt", "r", stdin);
+    freopen("output.txt", "w", stdout);
+#endif
+}
+extern struct node *const EMPTY;
+enum DIR {
+    L, R
+};
+typedef int DataType;
+mt19937 eng(0);
+uniform_int_distribution<int> rnd{INT_MIN + 1, INT_MAX};
+
+struct node {
+    DataType val;
+    int pri, sz;
+    bool isRev ;
+    node *ch[2], *par;
+    node() : pri(INT_MIN), sz(0), ch{this, this}, par(this) , isRev(false) {}
+
+    node(const DataType &val) : val(val), pri(rnd(eng)), sz(1), ch{EMPTY, EMPTY}, par(EMPTY) , isRev(false) {}
+
+    void upd() {
+        sz = ch[L]->sz + 1 + ch[R]->sz;
+    }
+
+    void rev() {
+        if (this == EMPTY)return;
+        isRev = !isRev;
+        swap(ch[L], ch[R]);
+    }
+
+    void push() {
+        if (this == EMPTY)return;
+        if (isRev) {
+            for (auto i: {L, R})
+                ch[i]->rev();
+            isRev = 0;
+        }
+    }
+};
+
+node *const EMPTY = new node();
+
+void link(node *p, node *c, int dir) {
+    if (c != EMPTY)c->par = p;
+    if (p != EMPTY) {
+        p->ch[dir] = c;
+        p->upd();
+    }
+}
+
+int getDir(node *p, node *c) {
+    return p->ch[R] == c;
+}
+
+
+pair<node *, node *> split(node *root, int frstSz) {
+    if (root == EMPTY)return {EMPTY, EMPTY};
+    root->push();
+    if (frstSz <= root->ch[L]->sz) {
+        auto [ls, gr] = split(root->ch[L], frstSz);
+        link(root, gr, L);
+        link(EMPTY, ls, L);
+        return {ls, root};
+    }
+    auto [ls, gr] = split(root->ch[R], frstSz - root->ch[L]->sz - 1);
+    link(root, ls, R);
+    link(EMPTY, gr, R);
+    return {root, gr};
+}
+
+node *merge(node *ls, node *gr) {
+    if (ls == EMPTY)return gr;
+    if (gr == EMPTY)return ls;
+    ls->push();
+    gr->push();
+    if (ls->pri > gr->pri) {
+        link(ls, merge(ls->ch[R], gr), R);
+        return ls;
+    }
+    link(gr, merge(ls, gr->ch[L]), L);
+    return gr;
+}
+
+void revRange(node *&root, int s, int e) {
+    node *bef, *aft, *bet;
+    tie(root, aft) = split(root, e + 1);
+    tie(bef, bet) = split(root, s);
+    bet->rev();
+    root = merge(merge(bef, bet), aft);
+}
+
+// DataType getSum(node *&root, int s, int e) {
+//     node *bef, *aft, *bet;
+//     tie(root, aft) = split(root, e + 1);
+//     tie(bef, bet) = split(root, s);
+//     DataType res = bet->sum;
+//     root = merge(merge(bef, bet), aft);
+//     return res;
+// }
+
+vector<int> dfsOrder (node *cur) {
+    vector<int> ret , lef , rt;
+    if(cur->ch[L] != EMPTY) lef = dfsOrder(cur->ch[L]) ;
+    if(cur->ch[R] != EMPTY) rt = dfsOrder(cur->ch[R]) ;
+
+    for(auto x : lef) ret.push_back(x) ;
+    ret.push_back(cur->val) ;
+    for(auto x : rt) ret.push_back(x) ;
+
+    return ret ;
+}
+void inorder(node *cur) {
+    if (cur == EMPTY) return;
+    inorder(cur->ch[0]);
+    cout << cur->val << ' ';
+    inorder(cur->ch[1]);
+}
+
+// we must apply every pending reversal on the path from the root.
+void pushFromRoot(node *cur) {
+    if(cur == EMPTY) return ;
+
+    pushFromRoot(cur->par) ;
+    cur->push() ;
+}
+
+// How many nodes appear before it in inorde r traversal .
+int getDfsOrder(node *cur) {
+    pushFromRoot(cur) ;
+
+    int res = cur->ch[L]->sz ;
+    while (cur->par != EMPTY)
+    {
+        if(getDir(cur->par , cur) == R) res += cur->par->ch[L]->sz + 1;
+        cur = cur->par ;
+    }
+    return res ;
+}
+void solve() {
+    int n ;
+    while(cin >> n && n) {
+        vector<node*> a(n) ;
+        node* root = EMPTY ;
+
+        for(int i = 0 ; i < n ; i++) {
+            int x ; cin >> x ;
+            a[i] = new node(x) ;
+            root = merge(root , a[i]) ;
+        }
+
+        stable_sort(a.begin() , a.end() , [&](node* f , node* l) {
+            return f->val < l->val ;
+        }) ;
+
+        vector<int> ans ;
+        for(int i = 0 ; i < n ; i++) {
+            int ind = getDfsOrder(a[i]) ;
+            ans.push_back(ind + 1) ;
+            revRange(root, i , ind) ;
+        }
+
+        for(int i : ans) cout << i << ' ' ;
+        cout << '\n' ;
+    }
+}
+
+int main() {
+    fast() ;
+    int tc = 1;
+    // cin >> tc;
+    while (tc--) {
+        solve();
+        if (tc) cout << '\n';
+    }
+
+    return 0;
+}
+// Difference between every pair of points in a range .
+extern struct node *const EMPTY;
+enum DIR {
+    L, R
+};
+typedef long long DataType;
+mt19937 eng(0);
+uniform_int_distribution<int> rnd{INT_MIN + 1, INT_MAX};
+
+struct node {
+    DataType val , sum , ans ;
+    int pri, sz;
+    node *ch[2], *par;
+
+    node() : pri(INT_MIN), sz(0), ch{this, this}, par(this) , val(0) , sum(0) , ans(0) {}
+
+    node(const DataType &val) : val(val), pri(rnd(eng)), sz(1), ch{EMPTY, EMPTY}, par(EMPTY) , sum(val) , ans(0) {}
+
+    void upd() {
+        if (this == EMPTY) return;
+
+        sz = ch[L]->sz + 1 + ch[R]->sz;
+        sum = ch[L]->sum + val + ch[R]->sum ;
+
+        long long ans1 = ch[L]->ans + ch[R]->ans ;
+        long long ans2 = ch[R]->sum - ch[R]->sz * val + ch[L]->sz * val - ch[L]->sum ;
+        long long ans3 = ch[L]->sz * ch[R]->sum - ch[R]->sz * ch[L]->sum ;
+
+        ans = ans1 + ans2 + ans3 ;
+    }
+};
+
+node *const EMPTY = new node();
+
+void link(node *p, node *c, int dir) {
+    if (c != EMPTY)c->par = p;
+    if (p != EMPTY) {
+        p->ch[dir] = c;
+        p->upd();
+    }
+}
+
+int getDir(node *p, node *c) {
+    return p->ch[R] == c;
+}
+
+/*
+left tree: keys < val
+right tree: keys >= val
+*/
+pair<node*, node*> split_by_value(node *root, int val) {
+    if (root == EMPTY) return {EMPTY, EMPTY};
+
+    // root->push();
+
+    if (root->val < val) {
+        auto [ls, gr] = split_by_value(root->ch[R], val);
+        link(root, ls, R);
+        link(EMPTY, gr, R);
+        return {root, gr};
+    } else {
+        auto [ls, gr] = split_by_value(root->ch[L], val);
+        link(root, gr, L);
+        link(EMPTY, ls, L);
+        return {ls, root};
+    }
+}
+// split by size
+pair<node *, node *> split(node *root, int frstSz) {
+    if (root == EMPTY)return {EMPTY, EMPTY};
+    // root->push();
+    if (frstSz <= root->ch[L]->sz) {
+        auto [ls, gr] = split(root->ch[L], frstSz);
+        link(root, gr, L);
+        link(EMPTY, ls, L);
+        return {ls, root};
+    }
+    auto [ls, gr] = split(root->ch[R], frstSz - root->ch[L]->sz - 1);
+    link(root, ls, R);
+    link(EMPTY, gr, R);
+    return {root, gr};
+}
+
+node *merge(node *ls, node *gr) {
+    if (ls == EMPTY)return gr;
+    if (gr == EMPTY)return ls;
+
+    // ls->push();
+    // gr->push();
+
+    if (ls->pri > gr->pri) {
+        link(ls, merge(ls->ch[R], gr), R);
+        return ls;
+    }
+    link(gr, merge(ls, gr->ch[L]), L);
+    return gr;
+}
+
+
+long long pos[100005];
+
+DataType getAns(node *&root , int l , int r) {
+    auto[_ , p1] = split_by_value(root , l) ;
+    auto[bet , p2] = split_by_value(p1 , r + 1) ;
+
+    long long ans = bet->ans ;
+
+    root = merge(_ , merge(bet, p2)) ;
+    return ans ;
+}
+// shift right with reverse range
+void solve() {
+    int n ; cin >> n ;
+    node *root = EMPTY ;
+
+    for(int i = 1 ; i <= n ; i++) {
+        cin >> pos[i] ;
+        auto [p1, p2] = split_by_value(root, pos[i]);
+        root = merge(p1, merge(new node(pos[i]), p2));
+    }
+
+    int q ; cin >> q ;
+    while(q--) {
+        int ty ; cin >> ty ;
+        if(ty == 1) {
+            int p , d ; cin >> p >> d ;
+
+            long long old_val = pos[p];
+            long long nval = old_val + d;
+            pos[p] = nval;
+
+
+            auto [less, ge] = split_by_value(root, old_val);
+            auto [eq, greater] = split_by_value(ge, old_val + 1);
+            root = merge(less, greater);
+
+            auto [p1, p2] = split_by_value(root, nval);
+            root = merge(p1, merge(new node(nval), p2));
+
+        } else {
+            int l , r ; cin >> l >> r ;
+            cout << getAns(root ,  l,  r) << '\n' ;
+        }
+    }
+}
+
+extern struct node *const EMPTY;
+enum DIR {
+    L, R
+};
+typedef long long DataType;
+mt19937 eng(0);
+uniform_int_distribution<int> rnd{INT_MIN + 1, INT_MAX};
+
+struct node {
+    DataType val ;
+    int pri, sz;
+    node *ch[2], *par;
+    bool isRev ;
+    node() : pri(INT_MIN), sz(0), ch{this, this}, par(this) , val(0) , isRev(false) {}
+
+    node(const DataType &val) : val(val), pri(rnd(eng)), sz(1), ch{EMPTY, EMPTY}, par(EMPTY) , isRev(false) {}
+
+    void upd() {
+        if (this == EMPTY) return;
+
+        sz = ch[L]->sz + 1 + ch[R]->sz;
+    }
+
+    void rev() {
+        isRev = !isRev ;
+    }
+
+    void push() {
+        if(this == EMPTY) return ;
+        if(isRev) {
+            swap(ch[L] , ch[R]) ;
+            if(ch[L] != EMPTY) ch[L]->rev() ;
+            if(ch[R] != EMPTY) ch[R]->rev() ;
+            isRev = false ;
+        }
+    }
+};
+
+node *const EMPTY = new node();
+
+void link(node *p, node *c, int dir) {
+    if (c != EMPTY)c->par = p;
+    if (p != EMPTY) {
+        p->ch[dir] = c;
+        p->upd();
+    }
+}
+
+int getDir(node *p, node *c) {
+    return p->ch[R] == c;
+}
+
+/*
+left tree: keys < val
+right tree: keys >= val
+*/
+pair<node*, node*> split_by_value(node *root, int val) {
+    if (root == EMPTY) return {EMPTY, EMPTY};
+
+    // root->push();
+
+    if (root->val < val) {
+        auto [ls, gr] = split_by_value(root->ch[R], val);
+        link(root, ls, R);
+        link(EMPTY, gr, R);
+        return {root, gr};
+    } else {
+        auto [ls, gr] = split_by_value(root->ch[L], val);
+        link(root, gr, L);
+        link(EMPTY, ls, L);
+        return {ls, root};
+    }
+}
+// split by size
+pair<node *, node *> split(node *root, int frstSz) {
+    if (root == EMPTY)return {EMPTY, EMPTY};
+    root->push();
+    if (frstSz <= root->ch[L]->sz) {
+        auto [ls, gr] = split(root->ch[L], frstSz);
+        link(root, gr, L);
+        link(EMPTY, ls, L);
+        return {ls, root};
+    }
+    auto [ls, gr] = split(root->ch[R], frstSz - root->ch[L]->sz - 1);
+    link(root, ls, R);
+    link(EMPTY, gr, R);
+    return {root, gr};
+}
+
+node *merge(node *ls, node *gr) {
+    if (ls == EMPTY)return gr;
+    if (gr == EMPTY)return ls;
+
+    ls->push();
+    gr->push();
+
+    if (ls->pri > gr->pri) {
+        link(ls, merge(ls->ch[R], gr), R);
+        return ls;
+    }
+    link(gr, merge(ls, gr->ch[L]), L);
+    return gr;
+}
+void shiftRight(node *&root , int l , int r) {
+    auto[_ , af] = split(root , r) ;
+    auto[__ , target] = split(_ , r - 1) ;
+    auto [b , bet] = split(__ , l - 1) ;
+
+    root = merge(b , merge(target , merge(bet , af))) ;
+}
+
+void revRange(node *&root , int l , int r) {
+    auto[_ , af] = split(root , r) ;
+    auto[b , bet] = split(_ , l - 1) ;
+
+    bet->rev() ;
+
+    root = merge(b , merge(bet , af)) ;
+}
+
+vector<int> dfsOrder (node *cur) {
+
+    cur->push() ;
+    vector<int> ret , lef , rt;
+    if(cur->ch[L] != EMPTY) lef = dfsOrder(cur->ch[L]) ;
+    if(cur->ch[R] != EMPTY) rt = dfsOrder(cur->ch[R]) ;
+
+    for(auto x : lef) ret.push_back(x) ;
+    ret.push_back(cur->val) ;
+    for(auto x : rt) ret.push_back(x) ;
+
+    return ret ;
+}
+
+void solve() {
+    int n , q , m ; cin >> n >> q >> m ;
+
+    node *root = EMPTY ;
+
+    for(int i = 0 ; i < n ; i++) {
+        int x ; cin >> x ;
+        root = merge(root , new node(x)) ;
+    }
+
+    while(q--) {
+        int t , l , r ; cin >> t >> l >> r ;
+        if(t == 1) {
+            shiftRight(root , l, r) ;
+        }else {
+            revRange(root , l, r) ;
+        }
+    }
+    vector<int> ans = dfsOrder(root) ;
+
+    // for(int x : ans) cout << x << ' ' ;
+    // cout << '\n' ;
+
+    for(int i = 0 ; i < m ; i++) {
+        int pos ; cin >> pos ;
+        cout << ans[pos - 1] << ' ' ;
+    }
+}
+
+
+extern struct node *const EMPTY;
+enum DIR {
+    L, R
+};
+typedef int DataType;
+mt19937 eng(0);
+uniform_int_distribution<int> rnd{INT_MIN + 1, INT_MAX};
+
+struct node {
+    DataType val;
+    int pri, sz;
+    int lazyAdd;
+    node *ch[2], *par;
+
+    node() : pri(INT_MIN), sz(0), ch{this, this}, par(this), lazyAdd(0) {}
+
+    node(const DataType &val) : val(val), pri(rnd(eng)), sz(1), ch{EMPTY, EMPTY}, par(EMPTY), lazyAdd(0) {}
+
+    void upd() {
+        sz = ch[L]->sz + 1 + ch[R]->sz;
+    }
+
+    void add(int v) {
+        if (this == EMPTY) return;
+        val += v;
+        lazyAdd += v;
+    }
+
+    void push() {
+        if (this == EMPTY) return;
+        if (lazyAdd != 0) {
+            for (auto i : {L, R}) {
+                ch[i]->add(lazyAdd);
+            }
+            lazyAdd = 0;
+        }
+    }
+};
+
+node *const EMPTY = new node();
+
+void link(node *p, node *c, int dir) {
+    if (c != EMPTY) c->par = p;
+    if (p != EMPTY) {
+        p->ch[dir] = c;
+        p->upd();
+    }
+}
+
+pair<node *, node *> split(node *root, int frstSz) {
+    if (root == EMPTY) return {EMPTY, EMPTY};
+    root->push();
+    if (frstSz <= root->ch[L]->sz) {
+        auto [ls, gr] = split(root->ch[L], frstSz);
+        link(root, gr, L);
+        link(EMPTY, ls, L);
+        return {ls, root};
+    }
+    auto [ls, gr] = split(root->ch[R], frstSz - root->ch[L]->sz - 1);
+    link(root, ls, R);
+    link(EMPTY, gr, R);
+    return {root, gr};
+}
+
+node *merge(node *ls, node *gr) {
+    if (ls == EMPTY) return gr;
+    if (gr == EMPTY) return ls;
+    ls->push();
+    gr->push();
+    if (ls->pri > gr->pri) {
+        link(ls, merge(ls->ch[R], gr), R);
+        return ls;
+    }
+    link(gr, merge(ls, gr->ch[L]), L);
+    return gr;
+}
+
+int countLess(node* t, DataType v) {
+    if (t == EMPTY) return 0;
+    t->push();
+    if (t->val < v) {
+        return t->ch[L]->sz + 1 + countLess(t->ch[R], v);
+    } else {
+        return countLess(t->ch[L], v);
+    }
+}
+
+void solve() {
+    int n; cin >> n ;
+    node* root = EMPTY;
+
+    for (int k = 0; k < n; k++) {
+        int l, r;
+        cin >> l >> r;
+
+        int cntL = countLess(root, l);
+        int cntR = countLess(root, r);
+
+        node *pref = EMPTY, *mid = EMPTY, *to_delete = EMPTY, *suff = EMPTY;
+
+        node *left_part = EMPTY;
+        tie(left_part, suff) = split(root, cntR + 1);
+        tie(left_part, to_delete) = split(left_part, cntR);
+        tie(pref, mid) = split(left_part, cntL);
+
+
+        mid->add(1);
+
+        node* new_node = new node(l);
+        root = merge(pref, new_node);
+        root = merge(root, mid);
+        root = merge(root, suff);
+    }
+    cout << root->sz << "\n";
+}
+
+// flip range , reverse range , get the maximum continus range of zeros or ones  .
+extern struct node *const EMPTY ;
+enum DIR{L , R} ;
+typedef long long DataType ;
+
+mt19937 eng(0) ;
+uniform_int_distribution<int> rnd{INT_MIN + 1, INT_MAX};
+
+struct node {
+    int val ;
+    int pri , sz ;
+    int pre[2], suff[2] , mx[2];
+    node *ch[2], *par;
+    bool is_reversed ;
+    bool lazy_flip;
+
+
+    node() : pri(INT_MIN), sz(0), ch{this, this}, par(this), val(0), lazy_flip(false) , is_reversed(false) {
+        mx[0] = mx[1] = pre[0] = pre[1] = suff[0] = suff[1] = 0;
+    }
+
+
+    node(int v) : val(v), pri(rnd(eng)), sz(1), ch{EMPTY, EMPTY}, par(EMPTY), lazy_flip(false) {
+        mx[v] = pre[v] = suff[v] = 1;
+        mx[1 - v] = pre[1 - v] = suff[1 - v] = 0;
+        is_reversed = false ;
+    }
+
+    void flip() {
+        if (this == EMPTY) return;
+        val ^= 1;
+        swap(mx[0], mx[1]);
+        swap(pre[0], pre[1]);
+        swap(suff[0], suff[1]);
+        lazy_flip = !lazy_flip;
+    }
+
+    void rev(){
+        if(this==EMPTY) return;
+
+        is_reversed ^= 1;
+
+        swap(ch[L], ch[R]);
+        swap(pre[0], suff[0]);
+        swap(pre[1], suff[1]);
+    }
+
+    void push() {
+        if(this == EMPTY) return ;
+        if(is_reversed) {
+            if (ch[L] != EMPTY) ch[L]->rev();
+            if (ch[R] != EMPTY) ch[R]->rev();
+            is_reversed = false;
+        }
+
+        if(lazy_flip){
+            if(ch[L] != EMPTY) ch[L]->flip();
+            if(ch[R] != EMPTY) ch[R]->flip();
+            lazy_flip = false;
+        }
+    }
+    void update () {
+        if(this == EMPTY) return ;
+
+        sz = ch[L]->sz + 1 + ch[R]->sz;
+
+        for(int c = 0 ; c < 2 ; c++) {
+            pre[c] = ch[L]->pre[c] ;
+            if (ch[L]->sz == ch[L]->pre[c] && val == c) {
+                pre[c] = ch[L]->sz + 1 + ch[R]->pre[c];
+            }
+
+            suff[c] = ch[R]->suff[c];
+            if (ch[R]->sz == ch[R]->suff[c] && val == c) {
+                suff[c] = ch[R]->sz + 1 + ch[L]->suff[c];
+            }
+
+            mx[c] = max(ch[L]->mx[c], ch[R]->mx[c]);
+            if (val == c) {
+                mx[c] = max(mx[c], ch[L]->suff[c] + 1 + ch[R]->pre[c]);
+            }
+        }
+    }
+} ;
+
+node *const EMPTY = new node();
+
+void link(node *p, node *c, int dir) {
+    if (c != EMPTY)c->par = p;
+    if (p != EMPTY) {
+        p->ch[dir] = c;
+        p->update();
+    }
+}
+
+int getDir(node *p, node *c) {
+    return p->ch[R] == c;
+}
+
+
+pair<node *, node *> split(node *root, int frstSz) {
+    if (root == EMPTY)return {EMPTY, EMPTY};
+    root->push();
+    if (frstSz <= root->ch[L]->sz) {
+        auto [ls, gr] = split(root->ch[L], frstSz);
+        link(root, gr, L);
+        link(EMPTY, ls, L);
+        return {ls, root};
+    }
+    auto [ls, gr] = split(root->ch[R], frstSz - root->ch[L]->sz - 1);
+    link(root, ls, R);
+    link(EMPTY, gr, R);
+    return {root, gr};
+}
+
+node *merge(node *ls, node *gr) {
+    if (ls == EMPTY)return gr;
+    if (gr == EMPTY)return ls;
+    ls->push();
+    gr->push();
+    if (ls->pri > gr->pri) {
+        link(ls, merge(ls->ch[R], gr), R);
+        return ls;
+    }
+    link(gr, merge(ls, gr->ch[L]), L);
+    return gr;
+}
+
+void updateRange(node *&root, int s, int e , int op) {
+    node *bef, *aft, *bet;
+    tie(root, aft) = split(root, e);
+    tie(bef, bet) = split(root, s - 1);
+
+    if(op == 0) bet->flip();
+    else bet->rev() ;
+
+    root = merge(merge(bef, bet), aft);
+}
+int getAns(node *&root, int s, int e) {
+    node *bef, *aft, *bet;
+    tie(root, aft) = split(root, e + 1);
+    tie(bef, bet) = split(root, s);
+    int ans = max(bet->mx[0] , bet->mx[1]) ;
+    root = merge(merge(bef, bet), aft);
+    return ans ;
+}
+void solve() {
+    int n , q ; cin >> n >> q ;
+
+    string s ; cin >> s ;
+
+    node *root = EMPTY;
+    for (int i = 0; i < n; ++i) {
+        node *cur = new node(s[i] - '0');
+        root = merge(root, cur);
+    }
+
+    while (q--) {
+        int ty, l, r;
+        cin >> ty >> l >> r;
+        updateRange(root, l, r , ty - 1);
+        cout << max(root->mx[0], root->mx[1]) << "\n";
+    }
+
+}

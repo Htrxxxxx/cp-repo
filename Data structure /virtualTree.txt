@@ -1,0 +1,84 @@
+struct VirtualTree {
+    int n, LOG;
+    vector<vector<int>> adj;
+    vector<vector<int>> vt_adj;
+    vector<int> tin, tout, dep;
+    vector<vector<int>> up;
+    int timer;
+
+    VirtualTree(int N) {
+        n = N;
+        LOG = 20;
+        adj.assign(n + 1, {});
+        vt_adj.assign(n + 1, {});
+        tin.resize(n + 1);
+        tout.resize(n + 1);
+        dep.resize(n + 1);
+        up.assign(LOG, vector<int>(n + 1));
+        timer = 0;
+    }
+
+    void addEdge(int u, int v) {
+        adj[u].push_back(v);
+        adj[v].push_back(u);
+    }
+
+    void dfs(int u, int p) {
+        tin[u] = ++timer;
+        up[0][u] = p;
+        for (int i = 1; i < LOG; i++)
+            up[i][u] = up[i - 1][up[i - 1][u]];
+
+        for (int v : adj[u]) {
+            if (v == p) continue;
+            dep[v] = dep[u] + 1;
+            dfs(v, u);
+        }
+
+        tout[u] = timer;
+    }
+
+    bool isAncestor(int u, int v) {
+        return tin[u] <= tin[v] && tout[v] <= tout[u];
+    }
+
+    int lca(int u, int v) {
+        if (isAncestor(u, v)) return u;
+        if (isAncestor(v, u)) return v;
+
+        for (int i = LOG - 1; i >= 0; i--)
+            if (!isAncestor(up[i][u], v))
+                u = up[i][u];
+
+        return up[0][u];
+    }
+
+    int build(vector<int> &nodes) {
+        sort(nodes.begin(), nodes.end(), [&](int a, int b) {
+            return tin[a] < tin[b];
+        });
+
+        int sz = nodes.size();
+        for (int i = 0; i + 1 < sz; i++)
+            nodes.push_back(lca(nodes[i], nodes[i + 1]));
+
+        sort(nodes.begin(), nodes.end(), [&](int a, int b) {
+            return tin[a] < tin[b];
+        });
+
+        nodes.erase(unique(nodes.begin(), nodes.end()), nodes.end());
+
+        vector<int> st;
+        st.push_back(nodes[0]);
+
+        for (int i = 1; i < (int)nodes.size(); i++) {
+            while (!isAncestor(st.back(), nodes[i]))
+                st.pop_back();
+
+            vt_adj[st.back()].push_back(nodes[i]);
+            st.push_back(nodes[i]);
+        }
+
+        return nodes[0];
+    }
+};

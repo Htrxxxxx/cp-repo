@@ -1,0 +1,226 @@
+#include <iostream>
+#include <vector>
+#include <algorithm>
+
+using namespace std;
+
+#include <iostream>
+#include <vector>
+#include <algorithm>
+
+using namespace std;
+
+// Space Complexity: O(N) to store N nodes in the vector 't'
+struct LinkCutTree {
+    struct Node {
+        int ch[2] = {0, 0};
+        int p = 0;
+        int rev = 0;
+
+        long long val = 0;      // Node's individual weight
+        long long psum = 0;     // Pure path sum in Splay tree (heavy path)
+        long long vsum = 0;     // Aggregate sum of virtual subtrees (light edges)
+        long long sub_sum = 0;  // Total sum of the whole splay subtree (path + virtuals)
+    };
+
+    vector<Node> t;
+
+    // Time Complexity: O(N) constructor
+    LinkCutTree(int n = 0) {
+        t.resize(n + 1);
+    }
+
+    // Time Complexity: O(1)
+    void set_val(int x, long long v) {
+        t[x].val = v;
+        push_up(x);
+    }
+
+    // Time Complexity: O(1)
+    bool is_root(int x) {
+        return t[t[x].p].ch[0] != x && t[t[x].p].ch[1] != x;
+    }
+
+    // Time Complexity: O(1)
+    void push_up(int x) {
+        if (!x) return;
+        // psum: sum along the heavy path
+        t[x].psum = t[x].val + t[t[x].ch[0]].psum + t[t[x].ch[1]].psum;
+
+        // sub_sum: total sum of the represented subtree component
+        t[x].sub_sum = t[x].val + t[x].vsum + t[t[x].ch[0]].sub_sum + t[t[x].ch[1]].sub_sum;
+    }
+
+    // Time Complexity: O(1)
+    void push_rev(int x) {
+        if (!x) return;
+        swap(t[x].ch[0], t[x].ch[1]);
+        t[x].rev ^= 1;
+    }
+
+    // Time Complexity: O(1)
+    void push_down(int x) {
+        if (t[x].rev) {
+            push_rev(t[x].ch[0]);
+            push_rev(t[x].ch[1]);
+            t[x].rev = 0;
+        }
+    }
+
+    // Time Complexity: O(log N) amortized
+    void push_all(int x) {
+        if (!is_root(x)) push_all(t[x].p);
+        push_down(x);
+    }
+
+    // Time Complexity: O(1)
+    void rotate(int x) {
+        int y = t[x].p, z = t[y].p;
+        int k = (t[y].ch[1] == x);
+        if (!is_root(y)) t[z].ch[t[z].ch[1] == y] = x;
+        t[x].p = z;
+        t[y].ch[k] = t[x].ch[k ^ 1];
+        if (t[x].ch[k ^ 1]) t[t[x].ch[k ^ 1]].p = y;
+        t[x].ch[k ^ 1] = y;
+        t[y].p = x;
+        push_up(y);
+        push_up(x);
+    }
+
+    // Time Complexity: O(log N) amortized
+    void splay(int x) {
+        push_all(x);
+        while (!is_root(x)) {
+            int y = t[x].p, z = t[y].p;
+            if (!is_root(y)) {
+                if ((t[y].ch[1] == x) ^ (t[z].ch[1] == y)) rotate(x);
+                else rotate(y);
+            }
+            rotate(x);
+        }
+    }
+
+    // Time Complexity: O(log N) amortized
+    int access(int x) {
+        int last = 0;
+        for (; x; last = x, x = t[x].p) {
+            splay(x);
+            // Old heavy child (ch[1]) becomes virtual (light)
+            if (t[x].ch[1]) t[x].vsum += t[t[x].ch[1]].sub_sum;
+            // New heavy child (last) leaves virtual (light)
+            if (last)       t[x].vsum -= t[last].sub_sum;
+
+            t[x].ch[1] = last;
+            push_up(x);
+        }
+        return last;
+    }
+
+    // Time Complexity: O(log N) amortized
+    void make_root(int x) {
+        access(x);
+        splay(x);
+        push_rev(x);
+    }
+
+    // Time Complexity: O(log N) amortized
+    // Link edge (u, v)
+    void link(int u, int v) {
+        make_root(u);
+        make_root(v);
+        t[u].p = v;
+        t[v].vsum += t[u].sub_sum; // u becomes a virtual child of v
+        push_up(v);
+    }
+
+    // Time Complexity: O(log N) amortized
+    // Cut edge (u, v)
+    void cut(int u, int v) {
+        make_root(u);
+        access(v);
+        splay(v);
+        if (t[v].ch[0] == u && !t[u].ch[1]) {
+            t[v].ch[0] = t[u].p = 0;
+            push_up(v);
+        }
+    }
+
+    // Time Complexity: O(log N) amortized
+    // Point update: a_p += x
+    void add_val(int p, long long x) {
+        access(p);
+        splay(p);
+        t[p].val += x;
+        push_up(p);
+    }
+
+    // Time Complexity: O(log N) amortized
+    // Path query: sum of vertices on path u <-> v
+    long long query_path(int u, int v) {
+        make_root(u);
+        access(v);
+        splay(v);
+        return t[v].psum;
+    }
+
+    // Time Complexity: O(log N) amortized
+    // Subtree query: sum of subtree v when p is parent
+    long long query_subtree(int v, int p) {
+        make_root(p);
+        access(v);
+        splay(v);
+        return t[v].val + t[v].vsum;
+    }
+};
+
+
+int main() {
+    ios_base::sync_with_stdio(false);
+    cin.tie(nullptr);
+    #ifndef ONLINE_JUDGE
+        freopen("input.txt", "r", stdin);
+        freopen("output.txt", "w", stdout);
+    #endif
+
+    int N, Q;
+    cin >> N >> Q ;
+
+    LinkCutTree lct(N);
+
+    for (int i = 0; i < N; ++i) {
+        long long a;
+        cin >> a;
+        lct.set_val(i + 1, a);
+    }
+
+    for (int i = 0; i < N - 1; ++i) {
+        int u, v;
+        cin >> u >> v;
+        u++; v++;
+        lct.link(u, v);
+    }
+
+    while (Q--) {
+        int type;
+        cin >> type;
+        if (type == 0) {
+            int u, v, w, x;
+            cin >> u >> v >> w >> x;
+            u++; v++; w++; x++;
+            lct.cut(u, v);
+            lct.link(w, x);
+        } else if (type == 1) {
+            int p;
+            long long x;
+            cin >> p >> x;
+            p++;
+            lct.add_val(p, x);
+        } else if (type == 2) {
+            int v, p;
+            cin >> v >> p;
+            v++; p++;
+            cout << lct.query_subtree(v, p) << "\n";
+        }
+    }
+    return 0;
+}

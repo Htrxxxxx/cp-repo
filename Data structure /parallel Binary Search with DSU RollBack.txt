@@ -1,0 +1,172 @@
+#include <bits/stdc++.h>
+using namespace std;
+
+struct dsu {
+    vector<int> parnt, sz, chckPoints , nxt;
+    vector<pair<int, int> > updates;
+    int cmp;
+
+    dsu(int n) {
+        sz.assign(n + 1, 1);
+        parnt.resize(n + 1);
+        nxt.resize(n + 1) ;
+        iota(parnt.begin(), parnt.end(), 0);
+        iota(nxt.begin(), nxt.end(), 1);
+        updates.clear();
+        cmp = n;
+    }
+
+    int find(int u) {
+        while (parnt[u] != u) u = parnt[u];
+        return u;
+    }
+    int mergeRange(int l , int r) {
+        if(nxt[l] > r) return nxt[l] ;
+        merge(l , nxt[l]) ;
+        return nxt[l] = mergeRange(nxt[l] , r) ;
+    }
+    bool merge(int u, int v) {
+        u = find(u), v = find(v);
+        if (u == v) {
+            return false;
+        }
+        if (sz[v] > sz[u]) swap(u, v);
+        sz[u] += sz[v];
+        parnt[v] = u;
+        updates.emplace_back(v, u);
+        cmp--;
+        return true;
+    }
+
+    void snapshot() {
+        chckPoints.push_back(updates.size());
+    }
+
+    void rollBack() {
+        if (chckPoints.empty()) return;
+        while (chckPoints.back() != updates.size()) {
+            auto [v , u] = updates.back();
+            sz[u] -= sz[v];
+            parnt[v] = v;
+            cmp++;
+            updates.pop_back();
+        }
+        chckPoints.pop_back();
+    }
+};
+
+const int dr[] = {-1, 1, 0, 0};
+const int dc[] = {0, 0, -1, 1};
+
+int m, n, q, V;
+vector<pair<int, int>> A;
+vector<int> pos;
+dsu* d;
+
+struct Query {
+    int u, v, id;
+};
+vector<Query> queries;
+vector<int> ans;
+
+void add_cell(int i) {
+    int u = A[i].second;
+    int r = u / n, c = u % n;
+    for (int dir = 0; dir < 4; ++dir) {
+        int nr = r + dr[dir], nc = c + dc[dir];
+        if (nr >= 0 && nr < m && nc >= 0 && nc < n) {
+            int v = nr * n + nc;
+            if (pos[v] <= i) {
+                d->merge(u, v);
+            }
+        }
+    }
+}
+
+void solve(int L, int R, vector<int>& idxs) {
+    if (idxs.empty()) return;
+    if (L == R) {
+        for (int qi : idxs) {
+            ans[queries[qi].id] = A[L].first;
+        }
+        return;
+    }
+
+    int M = (L + R) / 2;
+
+    d->snapshot();
+    for (int i = L; i <= M; i++) {
+        add_cell(i);
+    }
+
+    vector<int> left, right;
+    left.reserve(idxs.size());
+    right.reserve(idxs.size());
+
+    for (int qi : idxs) {
+        int u = queries[qi].u;
+        int v = queries[qi].v;
+        if (pos[u] <= M && pos[v] <= M && d->find(u) == d->find(v)) {
+            left.push_back(qi);
+        } else {
+            right.push_back(qi);
+        }
+    }
+
+    d->rollBack();
+    solve(L, M, left);
+
+    d->snapshot();
+    for (int i = L; i <= M; i++) {
+        add_cell(i);
+    }
+    solve(M + 1, R, right);
+    d->rollBack();
+}
+
+int main() {
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+
+    if (!(cin >> m >> n >> q)) return 0;
+
+    V = m * n;
+    A.resize(V);
+    for (int r = 0; r < m; r++) {
+        for (int c = 0; c < n; c++) {
+            int h;
+            cin >> h;
+            int u = r * n + c;
+            A[u] = {h, u};
+        }
+    }
+
+    sort(A.begin(), A.end());
+
+    pos.resize(V);
+    for (int i = 0; i < V; i++) {
+        pos[A[i].second] = i;
+    }
+
+    d = new dsu(V);
+
+    queries.resize(q);
+    for (int i = 0; i < q; i++) {
+        int x1, y1, x2, y2;
+        cin >> x1 >> y1 >> x2 >> y2;
+        x1--; y1--; x2--; y2--;
+        queries[i] = {x1 * n + y1, x2 * n + y2, i};
+    }
+
+    ans.resize(q);
+    vector<int> all(q);
+    iota(all.begin(), all.end(), 0);
+
+    solve(0, V - 1, all);
+
+    for (int i = 0; i < q; i++) {
+        cout << ans[i] << '\n';
+    }
+
+    return 0;
+}
