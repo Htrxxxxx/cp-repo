@@ -1,48 +1,53 @@
- 
-struct DSU {
-    vector<int> parent, sz, nxt;
+struct dsu {
+    vector<int> parnt, sz, chckPoints , nxt;
+    vector<pair<int, int> > updates;
     int cmp;
 
-    DSU(int n) {
-        parent.resize(n + 2);
-        sz.assign(n + 2, 1);
-        nxt.resize(n + 2);
-
-        iota(parent.begin(), parent.end(), 0);
-        iota(nxt.begin(), nxt.end(), 0);
-
+    dsu(int n) {
+        sz.assign(n + 1, 1);
+        parnt.resize(n + 1);
+        nxt.resize(n + 1) ;
+        iota(parnt.begin(), parnt.end(), 0);
+        iota(nxt.begin(), nxt.end(), 1);
+        updates.clear();
         cmp = n;
     }
 
     int find(int u) {
-        return parent[u] == u ? u : parent[u] = find(parent[u]);
+        while (parnt[u] != u) u = parnt[u];
+        return u;
     }
-
+    int mergeRange(int l , int r) {
+        if(nxt[l] > r) return nxt[l] ;
+        merge(l , nxt[l]) ;
+        return nxt[l] = mergeRange(nxt[l] , r) ;
+    }
     bool merge(int u, int v) {
-        u = find(u);
-        v = find(v);
-
-        if (u == v)
+        u = find(u), v = find(v);
+        if (u == v) {
             return false;
-
-        if (sz[u] < sz[v])
-            swap(u, v);
-
-        parent[v] = u;
+        }
+        if (sz[v] > sz[u]) swap(u, v);
         sz[u] += sz[v];
-        --cmp;
-
+        parnt[v] = u;
+        updates.emplace_back(v, u);
+        cmp--;
         return true;
     }
 
-    int getNext(int x) {
-        return nxt[x] == x ? x : nxt[x] = getNext(nxt[x]);
+    void snapshot() {
+        chckPoints.push_back(updates.size());
     }
 
-    void mergeRange(int l, int r) {
-        for (int x = getNext(l); x < r; x = getNext(x)) {
-            merge(x, x + 1);
-            nxt[x] = getNext(x + 1);
+    void rollBack() {
+        if (chckPoints.empty()) return;
+        while (chckPoints.back() != updates.size()) {
+            auto [v , u] = updates.back();
+            sz[u] -= sz[v];
+            parnt[v] = v;
+            cmp++;
+            updates.pop_back();
         }
+        chckPoints.pop_back();
     }
 };
